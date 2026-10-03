@@ -1,0 +1,116 @@
+/** Pointer interaction check against the installed ZIP in an isolated Electron host. */
+import { chromium, expect } from '@playwright/test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+const root = path.resolve('.tmp/host');
+const browser = await chromium.connectOverCDP('http://127.0.0.1:9229');
+const page = browser.contexts()[0].pages()[0];
+page.setDefaultTimeout(15000);
+assert.ok(page.url().toLowerCase().startsWith('file:///' + root.replaceAll('\\', '/').toLowerCase() + '/'), 'Only an isolated workspace host is allowed');
+const results = [];
+async function dismissIdle() {
+  const dialog = page.getByRole('button', { name: "Don't track", exact: true });
+  if (await dialog.count()) await dialog.click();
+}
+try {
+  await dismissIdle();
+  if (!await page.locator('iframe').count()) await page.getByText('Obsidian 同步', { exact: true }).click();
+  await expect(page.locator('iframe')).toHaveCount(1);
+  let ui = page.frameLocator('iframe');
+  const readStatus = async () => page.frames().find((frame) => frame.parentFrame()).evaluate(() => new Promise((resolve, reject) => {
+    const messageId = crypto.randomUUID();
+    const timeout = setTimeout(() => { removeEventListener('message', handler); reject(Error('Status timeout')); }, 10000);
+    const handler = (event) => {
+      if (event.source !== parent || event.data?.messageId !== messageId) return;
+      clearTimeout(timeout); removeEventListener('message', handler);
+      if (event.data.type === 'PLUGIN_MESSAGE_ERROR') reject(Error(event.data.error)); else resolve(event.data.result);
+    };
+    addEventListener('message', handler); parent.postMessage({ type: 'PLUGIN_MESSAGE', messageId, message: { command: 'status' } }, '*');
+  }));
+  const initial = await readStatus();
+  assert.equal(path.resolve(initial.config.vaultPath), path.join(root, 'vault'), 'Only the isolated test vault is allowed');
+  await expect(ui.getByRole('button', { name: '选择文件夹', exact: true })).toBeEnabled();
+  assert.ok(await ui.getByRole('button', { name: '选择文件夹', exact: true }).evaluate((node) => typeof node.$$click === 'function'), 'Install the latest fixed ZIP first');
+  // All writes below go through real controls. No DOM click(), force or mutation RPC.
+  await ui.getByRole('button', { name: '选择文件夹', exact: true }).click();
+  await expect(ui.getByRole('dialog', { name: '选择 vault' })).toBeVisible();
+  await ui.getByRole('button', { name: '↑ 上一级', exact: true }).click();
+  await ui.getByRole('button', { name: path.join(root, 'vault'), exact: true }).click();
+  await ui.getByRole('button', { name: '使用此文件夹', exact: true }).click();
+  await expect(ui.getByRole('dialog')).toHaveCount(0);
+  await expect(ui.getByLabel('Obsidian 文件夹')).toHaveValue(path.join(root, 'vault'));
+  results.push('文件夹打开、上一级、进入目录及确认：真实鼠标通过');
+  const project = initial.projects.find((item) => item.id === initial.config.projectIds[0]);
+  await ui.getByLabel(project.title, { exact: true }).uncheck();
+  if(initial.config.projectIds.length===1) await expect(ui.getByRole('button', { name: '保存设置', exact: true })).toBeDisabled();
+  else await expect(ui.getByRole('button', { name: '保存设置', exact: true })).toBeEnabled();
+  await ui.getByLabel(project.title, { exact: true }).check();
+  const exportNotes = ui.getByLabel('导出原生项目笔记（只读）');
+  await exportNotes.setChecked(!initial.config.exportProjectNotes); await exportNotes.setChecked(initial.config.exportProjectNotes);
+  const exportArchive = ui.getByLabel('导出历史归档（只读）');
+  await exportArchive.setChecked(!initial.config.exportArchive); await exportArchive.setChecked(initial.config.exportArchive);
+  await ui.getByLabel('具体时间使用的时区').fill(initial.config.timezone);
+  await ui.getByLabel('自动同步延迟').selectOption('60');
+  await ui.getByLabel('文件检查间隔').selectOption('120');
+  await ui.getByRole('button', { name: '保存设置', exact: true }).click();
+  await expect(ui.getByRole('button', { name: '保存设置', exact: true })).toBeEnabled({ timeout: 60000 });
+  assert.equal((await readStatus()).config.syncDelaySeconds,60);
+  assert.equal((await readStatus()).config.fileCheckSeconds,120);
+  await ui.getByLabel('自动同步延迟').selectOption(String(initial.config.syncDelaySeconds ?? 10));
+  await ui.getByLabel('文件检查间隔').selectOption(String(initial.config.fileCheckSeconds ?? 30));
+  await ui.getByRole('button', { name: '保存设置', exact: true }).click();
+  await expect(ui.getByRole('button', { name: '保存设置', exact: true })).toBeEnabled({ timeout: 60000 });
+  const saved=(await readStatus()).config;
+  assert.deepEqual({...saved,projectIds:[...saved.projectIds].sort()},{...initial.config,projectIds:[...initial.config.projectIds].sort()});
+  results.push('项目、导出开关、时区、延迟／检查间隔保存及还原：真实控件通过，配置一致');
+  await dismissIdle();
+  if (initial.config.paused) await ui.getByRole('button', { name: '恢复同步', exact: true }).click();
+  await expect(ui.getByRole('button', { name: '立即同步', exact: true })).toBeEnabled();
+  await ui.getByRole('button', { name: '立即同步', exact: true }).click();
+  await expect(ui.getByRole('button', { name: '立即同步', exact: true })).toBeEnabled({ timeout: 120000 });
+  await expect(ui.getByText('上次成功同步：', { exact: false })).toBeVisible();
+  await dismissIdle();
+  await ui.getByRole('button', { name: '暂停同步', exact: true }).click();
+  await expect(ui.getByText('已暂停', { exact: true })).toBeVisible();
+  assert.equal((await readStatus()).config.paused, true);
+  results.push('恢复、立即同步、暂停：真实按钮和磁盘同步通过');
+  const task = initial.tasks[0];
+  await ui.getByLabel('搜索任务').fill(task.title);
+  const input = ui.getByLabel(`${task.title}预计完成`, { exact: true });
+  const row = ui.locator('.task-edit').filter({ has: input });
+  await input.fill('2026-10-03T16:00:00-07:00');
+  await row.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(row.getByRole('button', { name: '保存', exact: true })).toBeEnabled({ timeout: 60000 });
+  assert.equal((await readStatus()).tasks.find((item) => item.id === task.id).expectedFinish, '2026-10-03T16:00:00-07:00');
+  await input.fill(task.expectedFinish || '');
+  await row.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(row.getByRole('button', { name: '保存', exact: true })).toBeEnabled({ timeout: 60000 });
+  assert.equal((await readStatus()).tasks.find((item) => item.id === task.id).expectedFinish, task.expectedFinish);
+  results.push('预计完成时间编辑、保存及还原：真实输入与后台持久化通过');
+  await dismissIdle();
+  await ui.getByRole('button', { name: '查看备份', exact: true }).click();
+  await ui.getByRole('button', { name: '查看／恢复', exact: true }).first().click();
+  await expect(ui.getByRole('dialog', { name: '内容预览' }).locator('pre')).toBeVisible();
+  await ui.getByRole('button', { name: '关闭', exact: true }).click();
+  await expect(ui.getByRole('dialog')).toHaveCount(0);
+  results.push('备份列表、预览、关闭：真实鼠标和文件读取通过');
+  await page.getByText('Today', { exact: true }).first().click();
+  await expect(page.locator('iframe')).toHaveCount(0);
+  await page.getByText('Obsidian 同步', { exact: true }).click();
+  await expect(page.locator('iframe')).toHaveCount(1);
+  ui = page.frameLocator('iframe');
+  await ui.getByRole('button', { name: '选择文件夹', exact: true }).click();
+  await ui.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(ui.getByRole('dialog')).toHaveCount(0);
+  await expect(ui.getByRole('alert')).toHaveCount(0);
+  results.push('退出后重开面板、取消弹窗：真实鼠标通过');
+  await page.screenshot({ path: path.join(root, 'ui-fixed.png'), fullPage: true });
+  const manifest=JSON.parse(await fs.readFile('manifest.json','utf8'));
+  await fs.writeFile(path.join(root, 'ui-acceptance.json'), JSON.stringify({ version: manifest.version, host: '19.1.0', at: new Date().toISOString(), results }, null, 2));
+  console.log(results.join('\n'));
+} catch (error) {
+  await page.screenshot({ path: path.join(root, 'ui-failure.png'), fullPage: true });
+  throw error;
+} finally { await browser.close(); }

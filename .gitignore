@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.tmp/
+test-results/
+playwright-report/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+/Super Productivity/

@@ -1,0 +1,44 @@
+{
+  "id": "sp-obsidian-sync",
+  "name": "Obsidian Vault Sync",
+  "version": "0.1.3",
+  "manifestVersion": 1,
+  "minSupVersion": "19.1.0",
+  "description": "按项目双向同步 Obsidian 任务、笔记、日期和标签，保留移除内容与冲突备份。",
+  "iFrame": true,
+  "isSkipMenuEntry": true,
+  "type": "standard",
+  "languageCodes": [
+    "zh",
+    "en"
+  ],
+  "hooks": [
+    "anyTaskUpdate",
+    "projectListUpdate",
+    "persistedDataChanged"
+  ],
+  "permissions": [
+    "nodeExecution",
+    "getTasks",
+    "getAppState",
+    "getArchivedTasks",
+    "getAllProjects",
+    "getAllTags",
+    "addTask",
+    "updateTask",
+    "batchUpdateForProject",
+    "reorderTasks",
+    "addTag",
+    "updateTag",
+    "updateProject",
+    "persistDataSynced",
+    "loadSyncedData",
+    "registerHook",
+    "showSnack"
+  ],
+  "nodeScriptConfig": {
+    "timeout": 30000,
+    "memoryLimit": "256MB"
+  },
+  "assets": []
+}
