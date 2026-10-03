@@ -34,12 +34,13 @@ export interface HostAPI {
   onMessage(callback: (message: unknown) => Promise<unknown>): void;
   onReady(callback: () => void | Promise<void>): void; onUnload(callback: () => void): void;
 }
+export type SyncLanguage = 'zh' | 'en';
 export interface SyncConfig {
   version: 1; vaultPath: string; projectIds: string[]; paused: boolean;
   timezone: string; exportProjectNotes: boolean; exportArchive: boolean;
-  syncDelaySeconds?: number; fileCheckSeconds?: number;
+  syncDelaySeconds?: number; fileCheckSeconds?: number; language?: SyncLanguage;
 }
-export const defaultConfig = (): SyncConfig => ({ version: 1, vaultPath: '', projectIds: [], paused: false, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, exportProjectNotes: false, exportArchive: false, syncDelaySeconds: 10, fileCheckSeconds: 30 });
+export const defaultConfig = (): SyncConfig => ({ version: 1, vaultPath: '', projectIds: [], paused: false, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, exportProjectNotes: false, exportArchive: false, syncDelaySeconds: 10, fileCheckSeconds: 30, language: 'zh' });
 export interface RemovedTask {
   reason: string; snapshot: HostTask; removedAt: string;
   note?: { originalPath: string; recoveryPath: string; hash: string; cleaned: boolean };
@@ -53,7 +54,7 @@ export interface TaskValue {
   notes: string;
 }
 export interface ReferenceBinding { path: string; body: string; taskIds: string[] }
-export interface Issue { code: string; message: string; path?: string; taskId?: string; candidates?: Array<{ label: string; body: string }> }
+export interface Issue { code: string; message: string; path?: string; taskId?: string; candidates?: Array<{ label: string; body: string; kind?: 'source' | 'copy' | 'task' }> }
 export interface ProjectBinding { directory: string; initialized: boolean; title: string }
 export interface JournalEntry { operationId: string; hostId?: string; projectId: string; parentId: string | null; title: string }
 export interface SyncState {

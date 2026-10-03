@@ -15,7 +15,7 @@ try {
   await expect(page.locator('iframe')).toHaveCount(0);
   await page.locator('button').filter({has:page.locator('mat-icon').filter({hasText:/^add$/})}).last().click();
   await page.locator('textarea').fill(title);await page.locator('textarea').press('Enter');await page.keyboard.press('Escape');
-  await page.getByText('Obsidian 同步',{exact:true}).click();await expect(page.locator('iframe')).toHaveCount(1);
+  await page.getByText(/^(?:Obsidian 同步|Obsidian Sync \/ Obsidian 同步)$/).click();await expect(page.locator('iframe')).toHaveCount(1);
   let ui=page.frameLocator('iframe');
   await expect(ui.getByRole('heading',{name:'把任务与笔记放在一起',exact:true})).toBeVisible();
   const frame=()=>page.frames().find(frame=>frame.parentFrame());
@@ -55,7 +55,7 @@ try {
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button',{name:'Delete',exact:true}).click();
   await expect(confirm).toHaveCount(0);
-  await page.getByText('Obsidian 同步',{exact:true}).click();await expect(page.locator('iframe')).toHaveCount(1);ui=page.frameLocator('iframe');
+  await page.getByText(/^(?:Obsidian 同步|Obsidian Sync \/ Obsidian 同步)$/).click();await expect(page.locator('iframe')).toHaveCount(1);ui=page.frameLocator('iframe');
   await expect(ui.getByRole('heading',{name:'把任务与笔记放在一起',exact:true})).toBeVisible();
   await synchronize();const deleted=await readState();
   assert.equal((await tasks()).some(task=>task.id===inbox.id),false);

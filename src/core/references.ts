@@ -1,4 +1,6 @@
 import { frontmatterBody, stableId } from './text';
+import type { SyncLanguage } from '../types';
+import { translate } from '../i18n';
 
 export interface EmbeddedReference { path: string; body: string }
 export interface NoteParts { own: string; embedded: EmbeddedReference[] }
@@ -21,10 +23,10 @@ export function noteParts(content: string): NoteParts {
   const own = (before.endsWith('\n\n') ? before.slice(0, -2) : before) + content.slice(b + END.length);
   return { own, embedded };
 }
-export function composeNote(own: string, references: EmbeddedReference[], excerpts: Array<{ target: string; body: string }> = []): string {
+export function composeNote(own: string, references: EmbeddedReference[], excerpts: Array<{ target: string; body: string }> = [], language?: SyncLanguage): string {
   if (!references.length && !excerpts.length) return own;
   const sections = references.map(({ path, body }) => `### [[${path.replace(/\.md$/, '')}]]\n<!-- sp-ref:${stableId(path)}:start -->\n${body}\n<!-- sp-ref:${stableId(path)}:end -->`);
-  sections.push(...excerpts.map(({ target, body }) => `### [[${target}]]（只读摘录）\n${body}`));
+  sections.push(...excerpts.map(({ target, body }) => `### [[${target}]] (${translate('只读摘录', language)})\n${body}`));
   return `${own}\n\n${START}\n${sections.join('\n\n')}\n${END}`;
 }
 export function referenceTargets(own: string): string[] {

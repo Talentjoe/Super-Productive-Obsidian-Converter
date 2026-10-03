@@ -1,13 +1,15 @@
 # 使用指南
 
-适用版本：插件 **0.1.3**，Super Productivity **19.1.0 或更新的 Windows 桌面版**。插件安装在 Super Productivity 中，Obsidian 无需额外安装插件。
+[English](USER-GUIDE.en.md) · [简体中文](USER-GUIDE.md)
+
+适用版本：插件 **0.1.4**，Super Productivity **19.1.0 或更新的 Windows 桌面版**。插件安装在 Super Productivity 中，Obsidian 无需额外安装插件。
 
 ## 1. 下载与安装
 
-1. 从仓库的 [v0.1.3 安装包目录](https://github.com/Talentjoe/Super-Productive-Obsidian-Converter/tree/main/releases/v0.1.3)下载 `sp-obsidian-sync.zip`。也可以按 [Git 与开发指南](GIT-GUIDE.md)从源码构建。
+1. 从仓库的 [v0.1.4 安装包目录](https://github.com/Talentjoe/Super-Productive-Obsidian-Converter/tree/main/releases/v0.1.4)下载 `sp-obsidian-sync.zip`。也可以按 [Git 与开发指南](GIT-GUIDE.md)从源码构建。
 2. 打开 Super Productivity 的“设置 → 插件”，选择／上传 ZIP，然后启用 **Obsidian Vault Sync**。
 3. 主程序询问 Node 文件访问权限时选择允许。这是读取和写入 vault 所需的官方桌面接口。
-4. 打开侧栏“Obsidian 同步”。升级时重新上传新版 ZIP，关闭原面板后再打开；现有配置和同步目录继续使用。
+4. 打开侧栏“Obsidian Sync / Obsidian 同步”。升级时重新上传新版 ZIP，关闭原面板后再打开；现有配置和同步目录继续使用。
 
 安装的 ZIP 是完整插件。单独在浏览器打开 `index.html` 只能看到安装提示，不能同步。
 
@@ -22,6 +24,10 @@
 7. 检查“待处理问题”，然后在 Obsidian 打开 `Super Productivity/index.md`。它链接到各项目、标签、日历和 AI 编辑指南。
 
 首次同步会合并两边已有内容，不根据标题合并同名任务，也不会因为 Markdown 没有某个任务就删除应用内容。新增行会自动获得身份标记。
+
+### 中英文切换
+
+在“语言 / Language”选择 English 或简体中文，再保存设置。可先只保存语言，再连接 vault。界面即时切换；下一次成功同步后，托管 notes 链接、索引区块和同步目录 AI 指南使用所选语言。英文链接显示 `notes`，中文显示“笔记”；两种别名和旧格式都继续兼容。任务 ID、note 路径、YAML、正文及用户标题／标签保留；已有生成区块外的标题不会强制翻译。
 
 ## 3. 同步目录
 

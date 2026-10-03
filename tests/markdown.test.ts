@@ -7,7 +7,7 @@ import { composeNote, noteParts, referenceTargets, resolveReference, excerpt } f
 describe('lossless task syntax', () => {
   it('parses compact note aliases and legacy wiki/plain fields without making them part of the title', () => {
     const path='Super Productivity/projects/示例--p/task-notes/id';
-    for(const syntax of [`[[${path}|笔记]]`,`[sp-notes:: [[${path}]]]`,`[sp-notes:: [[${path}|笔记]]]`,`[sp-notes:: ${path}]`]) {
+    for(const syntax of [`[[${path}|笔记]]`,`[[${path}|notes]]`,`[sp-notes:: [[${path}]]]`,`[sp-notes:: [[${path}|笔记]]]`,`[sp-notes:: [[${path}|notes]]]`,`[sp-notes:: ${path}]`]) {
       const row=parseTasks(`- [ ] 标题 ${syntax} <!-- sp:task:a --> ^sp-61`,'p1').rows[0];
       expect(row.id).toBe('a');expect(row.value.title).toBe('标题');expect(row.notePath).toBe(path+'.md');
       expect(renderRow('a',row.value,row.notePath!)).toContain(`[[${path}|笔记]]`);
@@ -16,6 +16,14 @@ describe('lossless task syntax', () => {
     expect(()=>parseTasks(`- [ ] A [[${path}|笔记]] [[${path}/two|笔记]]`,'p1')).toThrow('重复');
     const value=parseTasks('- [ ] 原始标题','p1').rows[0].value;value.title=`文字 [[${path}|笔记]]`;
     expect(parseTasks(renderRow('a',value,path+'.md'),'p1').rows[0].value).toEqual(value);
+  });
+  it('round-trips English aliases and literal links, rejecting mixed duplicate notes pointers', () => {
+    const value=parseTasks('- [ ] Keep text','p1').rows[0].value;
+    value.title='Literal [[资料/示例|notes]] and [[资料/另一个|笔记]]';
+    const row=renderRow('a',value,'task-notes/a.md',0,null,'en');
+    expect(row).toContain('[[task-notes/a|notes]]');
+    expect(parseTasks(row,'p1').rows[0]).toMatchObject({id:'a',value,notePath:'task-notes/a.md'});
+    expect(()=>parseTasks('- [ ] A [[task-notes/a|notes]] [[task-notes/b|笔记]]','p1')).toThrow('重复');
   });
   it('round-trips Unicode, literal syntax, all time fields and task identity', () => {
     const original = parseTasks('- [ ] 原始任务 #工作 ⏳ 2026-10-03 📅 2026-10-05 [sp-estimate-minutes:: 90] [sp-planned-time:: 14:00] [sp-deadline-time:: 18:00] [sp-expected-finish:: 2026-10-03T16:00:00-07:00]', 'p1').rows[0].value;

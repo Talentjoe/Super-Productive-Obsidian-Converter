@@ -12,6 +12,44 @@ const text = (path: string) => vault.files.get(path)!;
 const change = (path: string, from: string, to: string) => vault.files.set(path, text(path).replace(from, to));
 
 describe('engine integration', () => {
+  it('switches generated labels both ways without changing IDs, paths, note YAML/body or free text', async () => {
+    host.add(task('a',{title:'保持中文标题',notes:'正文\n\nSecond paragraph',dueDay:'2026-10-03'}));await sync();
+    const path=taskFile(engine.state,'p1'),note=engine.state.notesPaths.a,calendar='Super Productivity/calendar/2026-10-03.md';
+    const noteText='---\ncustom: true\n---\n正文\n\nSecond paragraph';vault.files.set(note,noteText);
+    vault.files.set(path,text(path)+'\n## 我的用户标题\n保留任务文件自由正文\n');
+    vault.files.set(calendar,text(calendar)+'\n我的下一步计划\n');
+    engine.config.language='en';await sync();expect(engine.issues).toEqual([]);
+    expect(text(path)).toContain(`[[${note.slice(0,-3)}|notes]]`);expect(text(path)).toContain('sp:task:a');
+    expect(text(path)).toContain('## 我的用户标题\n保留任务文件自由正文');
+    expect(text(calendar)).toContain('Task index (read-only)');expect(text(calendar)).toContain('Scheduled:');expect(text(calendar)).toContain('我的下一步计划');
+    expect(text('Super Productivity/index.md')).toContain('AI editing guide');
+    expect(text('Super Productivity/README.md')).toContain('# AI editing guide');
+    expect(text(note)).toBe(noteText);expect(host.state.tasks.a.title).toBe('保持中文标题');expect(host.created).toBe(0);
+    engine.config.language='zh';await sync();expect(text(path)).toContain(`[[${note.slice(0,-3)}|笔记]]`);
+    expect(engine.state.notesPaths.a).toBe(note);expect(text(note)).toBe(noteText);expect(text('Super Productivity/README.md')).toContain('AI 编辑指南');
+  });
+  it('imports English rows and notes, moves projects and resumes without duplicate creation', async () => {
+    engine.config.language='en';await sync();const source=taskFile(engine.state,'p1'),target=taskFile(engine.state,'p2');
+    vault.files.set(source,text(source)+'- [ ] Write requirements #work estimate [60min](<sp-estimate-minutes:: 60>)\n  - [ ] Collect material\n');await sync();
+    expect(engine.issues).toEqual([]);expect(host.created).toBe(2);
+    const root=Object.values(host.state.tasks).find(t=>t.title==='Write requirements')!,note=engine.state.notesPaths[root.id];
+    vault.files.set(note,'---\ncustom: yes\n---\nEnglish notes\n\n第二段正文');
+    change(source,'- [ ] Write requirements','- [x] Write requirements');await sync();expect(host.state.tasks[root.id].isDone).toBe(true);
+    const family=text(source).split('\n').filter(line=>line.includes('sp:task:'));
+    vault.files.set(source,text(source).split('\n').filter(line=>!line.includes('sp:task:')).join('\n'));vault.files.set(target,text(target)+family.join('\n')+'\n');await sync();
+    expect(engine.issues).toEqual([]);expect(host.state.tasks[root.id].projectId).toBe('p2');expect(engine.state.removed).toEqual({});
+    expect(host.state.tasks[root.id].notes).toBe('English notes\n\n第二段正文');expect(engine.state.notesPaths[root.id]).toBe(note);
+    engine=new SyncEngine(host,vault,{...engine.config});await sync();expect(host.created).toBe(2);expect(text(target)).toContain('|notes]]');
+  });
+  it('exports English read-only project notes and archives without importing their local edits', async () => {
+    engine.config={...engine.config,language:'en',exportProjectNotes:true,exportArchive:true};
+    host.state.notes.n={id:'n',projectId:'p1',content:'项目原文',modified:1,created:1};
+    host.archived=[task('old',{title:'Completed task',isDone:true,notes:'Archived body',doneOn:Date.UTC(2026,9,2)})];
+    await sync();expect(engine.issues).toEqual([]);
+    const note=[...vault.files.keys()].find(path=>path.includes('/project-notes/'))!,archive=[...vault.files.keys()].find(path=>path.includes('/archive/'))!;
+    expect(text(note)).toContain('Native project notes are a read-only export');expect(text(archive)).toContain('Archived tasks (read-only)');
+    vault.files.set(note,text(note).replace('项目原文','Local edit'));await sync();expect(host.state.notes.n.content).toBe('项目原文');expect(text(note)).toContain('项目原文');
+  });
   it('preserves native tagged children, exports other projects and still imports editable fields', async () => {
     host.state.tags={explore:{id:'explore',title:'Explore'},grad:{id:'grad',title:'Grad'},task:{id:'task',title:'Task'}};
     host.add(task('parent',{title:'尝试联系导师',tagIds:['explore','grad']}));

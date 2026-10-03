@@ -8,7 +8,7 @@ const browser=await chromium.connectOverCDP('http://127.0.0.1:9229');
 const page=browser.contexts()[0].pages()[0];page.setDefaultTimeout(15000);
 assert.ok(page.url().toLowerCase().startsWith('file:///'+root.replaceAll('\\','/').toLowerCase()+'/'),'Only the isolated host is allowed');
 try {
-  if(!await page.locator('iframe').count())await page.getByText('Obsidian 同步',{exact:true}).click();
+  if(!await page.locator('iframe').count())await page.getByText(/^(?:Obsidian 同步|Obsidian Sync \/ Obsidian 同步)$/).click();
   await expect(page.locator('iframe')).toHaveCount(1);
   const frame=page.frames().find(frame=>frame.parentFrame());
   const rpc=(command,data={})=>frame.evaluate(({command,data})=>new Promise((resolve,reject)=>{

@@ -1,4 +1,5 @@
-import type { TaskValue } from '../types';
+import type { SyncLanguage, TaskValue } from '../types';
+import { noteLabel, translate } from '../i18n';
 import { validDay, validateExpected, validateTime } from './dates';
 import { frontmatterBody, link, stableId } from './text';
 
@@ -8,10 +9,10 @@ export interface TaskRow {
 }
 export interface TaskDocument { content: string; lines: string[]; rows: TaskRow[]; newline: string }
 const fieldPattern = /(?<!\\)\[(sp-[a-z-]+)::\s*(\[\[[^\n]*?\]\]|[^\]\n]*)\]/g;
-const noteLinkPattern = /(?<![\\!])\[\[([^|\]#\r\n]+)\|笔记\]\]/g;
+const noteLinkPattern = /(?<![\\!])\[\[([^|\]#\r\n]+)\|(?:笔记|notes)\]\]/g;
 const supported = new Set(['sp-planned-time', 'sp-deadline-time', 'sp-estimate-minutes', 'sp-expected-finish', 'sp-notes', 'sp-spent-minutes', 'sp-completed-at', 'sp-list']);
 const unescapeTitle = (title: string) => title.replace(/\\([\\#\[<^⏳📅])/gu, '$1');
-export const escapeTitle = (title: string) => title.replace(/\\/g, '\\\\').replace(/[#⏳📅]/gu, '\\$&').replace(/\[sp-|<!--|\^sp-/g, '\\$&').replace(/\[(?=[^\]\n]+\]\(<?sp-estimate-minutes::)/g, '\\[').replace(/\[(?=\[[^|\]#\r\n]+\|笔记\]\])/g, '\\[');
+export const escapeTitle = (title: string) => title.replace(/\\/g, '\\\\').replace(/[#⏳📅]/gu, '\\$&').replace(/\[sp-|<!--|\^sp-/g, '\\$&').replace(/\[(?=[^\]\n]+\]\(<?sp-estimate-minutes::)/g, '\\[').replace(/\[(?=\[[^|\]#\r\n]+\|(?:笔记|notes)\]\])/g, '\\[');
 
 export function parseTasks(content: string, projectId: string, previousParents: Record<string, string | null> = {}): TaskDocument {
   const newline = content.includes('\r\n') ? '\r\n' : '\n';
@@ -102,7 +103,7 @@ export function parseTasks(content: string, projectId: string, previousParents: 
   return { content, lines, rows, newline };
 }
 
-export function renderRow(id: string, value: TaskValue, notePath: string, spent = 0, completed: number | null = null): string {
+export function renderRow(id: string, value: TaskValue, notePath: string, spent = 0, completed: number | null = null, language?: SyncLanguage): string {
   const fields: string[] = [];
   if (value.plannedDay) fields.push(`⏳ ${value.plannedDay}`);
   if (value.deadlineDay) fields.push(`📅 ${value.deadlineDay}`);
@@ -111,20 +112,20 @@ export function renderRow(id: string, value: TaskValue, notePath: string, spent 
   if (value.estimate) fields.push(`estimate [${value.estimate / 60000}min](<sp-estimate-minutes:: ${value.estimate / 60000}>)`);
   if (value.expectedFinish) fields.push(`[sp-expected-finish:: ${value.expectedFinish}]`);
   if (!value.parentId && value.list === 'backlog') fields.push('[sp-list:: backlog]');
-  fields.push(link(notePath, '笔记'));
+  fields.push(link(notePath, noteLabel(language)));
   if (spent) fields.push(`[sp-spent-minutes:: ${Math.round(spent / 600) / 100}]`);
   if (completed) fields.push(`[sp-completed-at:: ${new Date(completed).toISOString()}]`);
   return `${value.parentId ? '  ' : ''}- [${value.isDone ? 'x' : ' '}] ${escapeTitle(value.title)}${value.tags.length ? ` ${value.tags.map((t) => `#${t}`).join(' ')}` : ''} ${fields.join(' ')} <!-- sp:task:${id} --> ^sp-${stableId(id)}`;
 }
 
 /** Replace task slots, retaining every non-task line, even between task families. */
-export function rewriteTasks(doc: TaskDocument, rows: string[], projectId: string, title: string): string {
+export function rewriteTasks(doc: TaskDocument, rows: string[], projectId: string, title: string, language?: SyncLanguage): string {
   const slots = new Set(doc.rows.map((r) => r.line));
   let cursor = 0;
   const result = doc.lines.flatMap((line, index) => slots.has(index) ? (cursor < rows.length ? [rows[cursor++]] : []) : [line]);
   const extra = rows.slice(cursor);
   if (extra.length) { if (result.at(-1) === '') result.pop(); result.push(...extra, ''); }
-  if (!doc.content) result.unshift('---', `sp-project-id: ${JSON.stringify(projectId)}`, 'sp-format-version: 1', '---', `# ${title}`, '', '> 编辑此文件的任务；修改前参阅 [[Super Productivity/README|AI 编辑指南]]。', '');
+  if (!doc.content) result.unshift('---', `sp-project-id: ${JSON.stringify(projectId)}`, 'sp-format-version: 1', '---', `# ${title}`, '', `> ${translate('编辑此文件的任务；修改前参阅', language)} ${link('Super Productivity/README', translate('AI 编辑指南', language))}.`, '');
   return result.join(doc.newline);
 }
 

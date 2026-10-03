@@ -41,7 +41,16 @@ it('checks files at the configured interval instead of launching a process every
 it('migrates old settings and stops pending work when paused',async()=>{
   await start({syncDelaySeconds:undefined,fileCheckSeconds:undefined});
   const status=await message({command:'status'});
-  expect(status.config).toMatchObject({syncDelaySeconds:10,fileCheckSeconds:30});
+  expect(status.config).toMatchObject({syncDelaySeconds:10,fileCheckSeconds:30,language:'zh'});
   await message({command:'save-config',config:{...status.config,paused:true,fileCheckSeconds:120}});
   await vi.advanceTimersByTimeAsync(150000);expect(fixture.syncs).toBe(0);expect(fixture.scans).toBe(0);
+});
+it('persists English settings and rejects unsupported languages without replacing them',async()=>{
+  await start({language:undefined,paused:true});const status=await message({command:'status'});
+  expect(status.config.language).toBe('zh');
+  const storage=vi.spyOn(localStorage,'setItem');
+  const saved=await message({command:'save-config',config:{...status.config,language:'en'}});
+  expect(saved.config.language).toBe('en');expect(JSON.parse(storage.mock.calls.at(-1)![1]).language).toBe('en');
+  await expect(message({command:'save-config',config:{...saved.config,language:'fr'}})).rejects.toThrow('语言');
+  expect((await message({command:'status'})).config.language).toBe('en');
 });

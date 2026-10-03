@@ -3,13 +3,13 @@ import { readFile, readdir } from 'node:fs/promises';
 import { unzipSync, strFromU8 } from 'fflate';
 
 // Test the exact ZIP iframe and its parent message bridge, without the dev RPC bypass.
-async function packaged(page: Page, options = { dropStatus: 0, holdBrowse: false }) {
+async function packaged(page: Page, options: { dropStatus: number; holdBrowse: boolean; configured?: boolean } = { dropStatus: 0, holdBrowse: false }) {
   const html = await readFile('dist/index.html', 'utf8');
   await page.route('**/__packaged-host', (route) => route.fulfill({ contentType: 'text/html', body: '<html><body style="margin:0"><iframe id="plugin" sandbox="allow-scripts allow-same-origin" style="width:100%;height:900px;border:0"></iframe></body></html>' }));
   await page.goto('/__packaged-host');
   await page.clock.install();
   await page.evaluate(({ html, options }) => {
-    const status = { config: { version: 1, vaultPath: '', projectIds: [] as string[], timezone: 'America/Los_Angeles', paused: false, exportArchive: false, exportProjectNotes: false }, running: false, lastSync: null as string | null,
+    const status = { config: { version: 1, vaultPath: options.configured ? 'D:\\Vault' : '', projectIds: options.configured ? ['p1'] : [] as string[], timezone: 'America/Los_Angeles', paused: false, exportArchive: false, exportProjectNotes: false }, running: false, lastSync: null as string | null,
       projects: [{ id: 'p1', title: '网站改版', taskIds: [], backlogTaskIds: [] }], tasks: [{ id: 't1', title: '编写需求说明', expectedFinish: null as string | null }], removed: [], issues: [] };
     const requests: Record<string, any>[] = [];
     let pending: MessageEvent | undefined;
@@ -43,6 +43,49 @@ test('ZIP contains literal bundled JavaScript, including Solid event handler key
   const zip = unzipSync(await readFile('dist/sp-obsidian-sync.zip'));
   expect(strFromU8(zip['index.html'])).toBe(html);
   expect(JSON.parse(strFromU8(zip['manifest.json'])).version).toBe(JSON.parse(await readFile('manifest.json','utf8')).version);
+});
+
+test('English ZIP iframe saves language, browses, syncs and retains it when reopened', async ({page}) => {
+  const frame=await packaged(page);
+  await expect(frame.getByRole('heading',{name:'把任务与笔记放在一起'})).toBeVisible();
+  await frame.locator('#language').selectOption('en');
+  await expect(frame.getByRole('heading',{name:'Keep tasks and notes together'})).toBeVisible();
+  await expect(frame.getByLabel('Export native project notes (read-only)')).not.toBeChecked();
+  await expect(frame.locator('#delay')).toContainText('10 seconds');
+  await frame.getByRole('button',{name:'Save settings',exact:true}).click();
+  await frame.getByRole('button',{name:'Choose folder',exact:true}).click();
+  await expect(frame.getByRole('dialog',{name:'Choose vault',exact:true})).toBeVisible();
+  await frame.getByRole('button',{name:'Use this folder'}).click();
+  await frame.getByLabel('网站改版').check();await frame.getByRole('button',{name:'Save settings',exact:true}).click();
+  await frame.getByRole('button',{name:'Sync now',exact:true}).click();
+  await expect(frame.getByText('Last successful sync:',{exact:false})).toBeVisible();
+  await frame.getByLabel('编写需求说明 expected finish').fill('2026-10-03T16:');
+  await page.clock.runFor(11000);await expect(frame.getByLabel('编写需求说明 expected finish')).toHaveValue('2026-10-03T16:');
+  await frame.getByRole('button',{name:'Pause sync',exact:true}).click();await expect(frame.getByText('Paused',{exact:true})).toBeVisible();
+  await frame.getByRole('button',{name:'Resume sync',exact:true}).click();
+  const requests=await page.evaluate(()=>(window as any).__packaged.requests);
+  expect(requests.filter((r:any)=>r.command==='save-config').at(-1).config).toMatchObject({language:'en',projectIds:['p1'],vaultPath:'D:\\Vault'});
+  await page.evaluate(()=>{const iframe=document.querySelector('iframe')!;const html=iframe.srcdoc;iframe.srcdoc='';iframe.srcdoc=html;});
+  await expect(frame.getByRole('heading',{name:'Keep tasks and notes together'})).toBeVisible();
+  await expect(frame.locator('html')).toHaveAttribute('lang','en-US');
+  await page.setViewportSize({width:390,height:844});
+  expect(await frame.locator('html').evaluate(el=>el.scrollWidth<=window.innerWidth)).toBe(true);
+  await page.screenshot({path:'.tmp/ui-english-packaged.png',fullPage:true});
+  await frame.locator('#language').selectOption('zh');await page.clock.runFor(11000);
+  await expect(frame.getByRole('heading',{name:'把任务与笔记放在一起'})).toBeVisible();
+  await frame.getByRole('button',{name:'保存设置',exact:true}).click();
+  expect((await page.evaluate(()=>(window as any).__packaged.requests)).filter((r:any)=>r.command==='save-config').at(-1).config.language).toBe('zh');
+});
+
+test('language selected before connection retains the saved vault and projects on reconnect',async({page})=>{
+  const frame=await packaged(page,{dropStatus:1,holdBrowse:false,configured:true});
+  await frame.locator('#language').selectOption('en');await page.clock.runFor(5001);
+  await frame.getByRole('button',{name:'Reconnect',exact:true}).click();
+  await expect(frame.getByLabel('Obsidian vault folder')).toHaveValue('D:\\Vault');
+  await expect(frame.getByLabel('网站改版')).toBeChecked();
+  await frame.getByRole('button',{name:'Save settings',exact:true}).click();
+  const saved=await page.evaluate(()=>(window as any).__packaged.requests.filter((r:any)=>r.command==='save-config').at(-1).config);
+  expect(saved).toMatchObject({language:'en',vaultPath:'D:\\Vault',projectIds:['p1']});
 });
 
 test('packaged iframe accepts pointer clicks, typing, checkboxes and background replies', async ({ page }) => {

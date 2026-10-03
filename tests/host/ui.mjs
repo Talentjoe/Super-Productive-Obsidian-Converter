@@ -16,7 +16,7 @@ async function dismissIdle() {
 }
 try {
   await dismissIdle();
-  if (!await page.locator('iframe').count()) await page.getByText('Obsidian 同步', { exact: true }).click();
+  if (!await page.locator('iframe').count()) await page.getByText(/^(?:Obsidian 同步|Obsidian Sync \/ Obsidian 同步)$/).click();
   await expect(page.locator('iframe')).toHaveCount(1);
   let ui = page.frameLocator('iframe');
   const readStatus = async () => page.frames().find((frame) => frame.parentFrame()).evaluate(() => new Promise((resolve, reject) => {
@@ -98,7 +98,7 @@ try {
   results.push('备份列表、预览、关闭：真实鼠标和文件读取通过');
   await page.getByText('Today', { exact: true }).first().click();
   await expect(page.locator('iframe')).toHaveCount(0);
-  await page.getByText('Obsidian 同步', { exact: true }).click();
+  await page.getByText(/^(?:Obsidian 同步|Obsidian Sync \/ Obsidian 同步)$/).click();
   await expect(page.locator('iframe')).toHaveCount(1);
   ui = page.frameLocator('iframe');
   await ui.getByRole('button', { name: '选择文件夹', exact: true }).click();

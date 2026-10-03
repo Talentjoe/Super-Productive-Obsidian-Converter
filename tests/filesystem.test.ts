@@ -78,6 +78,11 @@ describe('real Windows-compatible Node bridge filesystem', () => {
     writeFileSync(join(root, taskPath), file!.content.replace('真实文件测试', '磁盘编辑')); await engine.sync(); expect(host.state.tasks.a.title).toBe('磁盘编辑');
     const restarted = new SyncEngine(host, vault, config); await restarted.sync(); expect(restarted.issues).toEqual([]); expect(restarted.state.baseline.a.title).toBe('磁盘编辑');
     expect(readFileSync(join(root, 'Super Productivity/README.md'), 'utf8')).toContain('AI 编辑指南');
+    const notePath=engine.state.notesPaths.a,originalNote=readFileSync(join(root,notePath),'utf8');
+    config.language='en';await restarted.sync();expect(restarted.issues).toEqual([]);
+    expect(readFileSync(join(root,taskPath),'utf8')).toContain(`[[${notePath.slice(0,-3)}|notes]]`);
+    expect(readFileSync(join(root,'Super Productivity/README.md'),'utf8')).toContain('# AI editing guide');
+    expect(readFileSync(join(root,notePath),'utf8')).toBe(originalNote);
   });
   it('batches real file reads/writes with preflight, backups and safe note cleanup', async () => {
     const a='Super Productivity/projects/p/task-notes/a.md', b='Super Productivity/projects/q/task-notes/b.md';

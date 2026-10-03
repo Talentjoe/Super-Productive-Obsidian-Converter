@@ -1,10 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 
-async function setup(page: Page) {
-  await page.addInitScript(() => {
+async function setup(page: Page, withIssues = false) {
+  await page.addInitScript((withIssues) => {
     const status = { config: { version: 1, vaultPath: '', projectIds: [], timezone: 'America/Los_Angeles', paused: false, exportArchive: false, exportProjectNotes: false }, running: false, lastSync: null as string | null,
       projects: [{ id: 'p1', title: '网站改版', taskIds: [], backlogTaskIds: [] }, { id: 'p2', title: '<script>不会执行</script>', taskIds: [], backlogTaskIds: [] }],
       tasks: [{ id: 't1', title: '编写需求说明', expectedFinish: null }], removed: [{ id: 'r1', title: '保留的任务', reason: 'Markdown 任务行已移除' }], issues: [] };
+    if(withIssues) (status as any).issues=[
+      {code:'verification-paused',message:'应用更新未通过读回验证：保存设置；差异字段：tags。暂停该项目，其余项目继续。'},
+      {code:'file-paused',message:'任务文件缺失，绑定暂停（可在面板重建）：Super Productivity/projects/项目/tasks.md'},
+      {code:'reference-conflict',message:'多个任务给出不同引用正文，暂停该笔记写回；选择一个版本恢复',path:'资料.md',candidates:[{label:'源文件',body:'用户的源文件正文',kind:'task'},{label:'Obsidian 源文件',body:'Source body',kind:'source'}]},
+    ];
     window.__OBSIDIAN_TEST_RPC__ = async (data) => {
       const request = data as Record<string, any>;
       switch (request.command) {
@@ -20,7 +25,7 @@ async function setup(page: Page) {
         default: throw new Error('未知测试命令');
       }
     };
-  });
+  }, withIssues);
   await page.goto('/');
 }
 test('configure vault and projects, default exports off, sync and pause', async ({ page }) => {
@@ -56,4 +61,25 @@ test('keeps an unfinished time edit through automatic status refresh', async ({ 
   await page.clock.install(); await setup(page);
   const input=page.getByLabel('编写需求说明预计完成'); await input.fill('2026-10-03T16:');
   await page.clock.runFor(11000); await expect(page.getByLabel('编写需求说明预计完成')).toHaveValue('2026-10-03T16:');
+});
+
+test('English translates standalone connection errors before a host is available',async({page})=>{
+  await page.goto('/');await page.locator('#language').selectOption('en');
+  await expect(page.getByRole('status')).toContainText('Open this page in the Super Productivity plugin panel');
+  await expect(page.getByRole('button',{name:'Reconnect',exact:true})).toBeVisible();
+});
+
+test('English diagnostics and removal reasons preserve user titles and preview bodies',async({page})=>{
+  await setup(page,true);await page.locator('#language').selectOption('en');
+  await expect(page.getByText('App update failed readback verification: 保存设置; differing fields: tags.',{exact:false})).toBeVisible();
+  await expect(page.getByText('Rebuild a missing task file:',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'View: 源文件',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'View: Obsidian source file',exact:true})).toBeVisible();
+  await expect(page.getByText('The Markdown task row was removed',{exact:true})).toBeVisible();
+  await expect(page.getByText('保留的任务',{exact:true})).toBeVisible();
+  await page.getByLabel('Obsidian vault folder').fill('D:\\Vault');await page.getByLabel('网站改版').check();await page.getByRole('button',{name:'Save settings',exact:true}).click();
+  await page.getByRole('button',{name:'View backups',exact:true}).click();await page.getByRole('button',{name:'View / restore',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Content preview',exact:true}).locator('pre')).toContainText('备份原文');
+  await expect(page.getByRole('dialog').locator('script')).toHaveCount(0);
+  await page.getByRole('button',{name:'Close',exact:true}).click();
 });

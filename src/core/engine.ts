@@ -3,7 +3,8 @@ import { readSnapshot } from '../adapters/snapshot';
 import { emptyState } from '../types';
 import { timestamp, validateExpected } from './dates';
 import { ROOT, indexExports, isTagAlias, tagAliases, taskFile, valueFromHost } from './exports';
-import { guide } from './guide';
+import { getGuide } from './guide';
+import { translate } from '../i18n';
 import { equal, mergeTask } from './merge';
 import { parseTasks, renderRow, rewriteTasks, stampOperation, type TaskDocument, type TaskRow } from './markdown';
 import { property, setProperty } from './properties';
@@ -367,14 +368,14 @@ export class SyncEngine {
       let body = sourceBody;
       const variants = [...new Set(changes.map((entry) => entry.body!))];
       if (variants.length > 1) {
-        this.issue('reference-conflict', '多个任务给出不同引用正文，暂停该笔记写回；选择一个版本恢复', { path, candidates: [{ label: 'Obsidian 源文件', body: sourceBody }, ...changes.map((entry) => ({ label: candidates.get(entry.id)!.value.title, body: entry.body! }))] });
+        this.issue('reference-conflict', '多个任务给出不同引用正文，暂停该笔记写回；选择一个版本恢复', { path, candidates: [{ label: 'Obsidian 源文件', body: sourceBody, kind: 'source' }, ...changes.map((entry) => ({ label: candidates.get(entry.id)!.value.title, body: entry.body!, kind: 'task' as const }))] });
         // Preserve every competing embedded version; other references can still synchronize.
         continue;
       }
       if (variants.length === 1) {
         if (sourceBody === base!.body || changes.some((entry) => entry.hostChanged)) body = variants[0];
         else {
-          this.issue('reference-conflict', '源笔记和 Markdown 中的引用副本同时变化，选择版本后写回', { path, candidates: [{ label: '源文件', body: sourceBody }, { label: '引用副本', body: variants[0] }] }); continue;
+          this.issue('reference-conflict', '源笔记和 Markdown 中的引用副本同时变化，选择版本后写回', { path, candidates: [{ label: '源文件', body: sourceBody, kind: 'source' }, { label: '引用副本', body: variants[0], kind: 'copy' }] }); continue;
         }
       }
       if (body !== sourceBody) await this.write(path, prefix + body);
@@ -394,7 +395,7 @@ export class SyncEngine {
           if (body !== undefined && !embedded.some((item) => item.path === ref.path)) embedded.push({ path: ref.path, body });
         }
       }
-      candidate.value.notes = composeNote(split.own, embedded, excerpts);
+      candidate.value.notes = composeNote(split.own, embedded, excerpts, this.config.language);
     }
   }
   private async tagIds(aliases: string[], snapshot: AppSnapshot): Promise<string[]> {
@@ -518,29 +519,29 @@ export class SyncEngine {
       }
       const rows = order.filter((id) => candidates.get(id)?.value.projectId === projectId).map((id) => {
         const candidate = candidates.get(id)!, task = snapshot.tasks[id];
-        return renderRow(id, candidate.value, this.state.notesPaths[id], task.timeSpent, task.doneOn || null);
+        return renderRow(id, candidate.value, this.state.notesPaths[id], task.timeSpent, task.doneOn || null, this.config.language);
       });
-      let output = rewriteTasks(doc.document, rows, projectId, snapshot.projects[projectId].title);
+      let output = rewriteTasks(doc.document, rows, projectId, snapshot.projects[projectId].title, this.config.language);
       output = setProperty(output, 'sp-project-title', snapshot.projects[projectId].title);
       entries.push({ path: doc.path, content: output });
       await this.writeSet(entries);
     }
   }
   private async exportIndexes(snapshot: AppSnapshot, selected: string[]): Promise<void> {
-    await this.write(`${ROOT}/README.md`, guide);
-    const indexes = indexExports(snapshot, this.state, selected, this.config.timezone);
+    await this.write(`${ROOT}/README.md`, getGuide(this.config.language));
+    const indexes = indexExports(snapshot, this.state, selected, this.config.timezone, this.config.language);
     // Clear obsolete generated calendar/tag sections while retaining user prose.
     for (const path of Object.keys(this.state.fileHashes)) {
       if (indexes[path] || (!path.startsWith(`${ROOT}/calendar/`) && !path.startsWith(`${ROOT}/tags/`))) continue;
       const file = await this.read(path); if (!file) continue;
       const name = path.startsWith(`${ROOT}/tags/`) ? 'tag' : 'calendar';
-      if (file.content.includes(`<!-- sp-generated:${name}:start -->`)) await this.write(path, generatedBlock(file.content, name, '> 当前没有匹配任务。', ''));
+      if (file.content.includes(`<!-- sp-generated:${name}:start -->`)) await this.write(path, generatedBlock(file.content, name, `> ${translate('当前没有匹配任务。', this.config.language)}`, ''));
     }
     if (this.config.exportProjectNotes) {
       for (const note of Object.values(snapshot.notes).filter((n) => n.projectId && selected.includes(n.projectId))) {
         const path = `${this.state.projects[note.projectId!].directory}/project-notes/${stableId(note.id)}.md`;
         const previous = await this.read(path);
-        await this.write(path, generatedBlock(previous?.content ?? null, 'project-note', note.content, `---\nsp-note-id: ${JSON.stringify(note.id)}\nsp-read-only: true\n---\n> 原生项目笔记只读导出；编辑不会写回应用。\n`));
+        await this.write(path, generatedBlock(previous?.content ?? null, 'project-note', note.content, `---\nsp-note-id: ${JSON.stringify(note.id)}\nsp-read-only: true\n---\n> ${translate('原生项目笔记只读导出；编辑不会写回应用。', this.config.language)}\n`));
       }
     }
     if (this.config.exportArchive) {
@@ -559,7 +560,7 @@ export class SyncEngine {
           for (const id of task.subTaskIds || []) if (families.has(id)) expanded.set(id, families.get(id)!);
         }
         const body = [...expanded.values()].sort((a, b) => (a.parentId || a.id).localeCompare(b.parentId || b.id) || Number(!!a.parentId) - Number(!!b.parentId)).map((task) => `${task.parentId ? '  ' : ''}- [${task.isDone ? 'x' : ' '}] ${task.title}\n\n${task.notes || ''}`).join('\n\n');
-        const previous = await this.read(path); await this.write(path, generatedBlock(previous?.content ?? null, 'archive', body, '# 历史归档（只读）\n'));
+        const previous = await this.read(path); await this.write(path, generatedBlock(previous?.content ?? null, 'archive', body, `# ${translate('历史归档（只读）', this.config.language)}\n`));
       }
     }
     await this.prefetch(Object.keys(indexes));
@@ -570,7 +571,7 @@ export class SyncEngine {
         const extra = Object.keys(this.state.fileHashes).filter((file) =>
           (this.config.exportProjectNotes && file.startsWith(`${directory}/project-notes/`)) ||
           (this.config.exportArchive && file.startsWith(`${directory}/archive/`)));
-        if (extra.length) index.body += `\n\n## 只读导出\n\n${extra.sort().map((file) => `- ${link(file, file.slice(directory.length + 1))}`).join('\n')}`;
+        if (extra.length) index.body += `\n\n## ${translate('只读导出', this.config.language)}\n\n${extra.sort().map((file) => `- ${link(file, file.slice(directory.length + 1))}`).join('\n')}`;
       }
       const previous = await this.read(path);
       let content = generatedBlock(previous?.content ?? null, index.name, index.body, index.initial);

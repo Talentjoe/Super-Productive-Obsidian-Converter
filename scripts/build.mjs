@@ -30,11 +30,12 @@ for (const dependency of ['solid-js', '@js-temporal/polyfill', 'jsbi']) {
 }
 await writeFile('dist/THIRD_PARTY_NOTICES.md', notices);
 await writeFile('dist/README.md', await readFile('README.md'));
+await writeFile('dist/README.zh-CN.md', await readFile('README.zh-CN.md'));
 await mkdir('dist/docs', { recursive: true });
-const documentFiles = ['AI-GUIDE.md', 'FORMAT-EXAMPLES.md', 'VALIDATION.md', 'USER-GUIDE.md', 'GIT-GUIDE.md'];
+const documentFiles = ['AI-GUIDE.md', 'AI-GUIDE.en.md', 'FORMAT-EXAMPLES.md', 'VALIDATION.md', 'USER-GUIDE.md', 'USER-GUIDE.en.md', 'GIT-GUIDE.md'];
 for (const file of documentFiles) await writeFile(`dist/docs/${file}`, await readFile(`docs/${file}`));
 const archive = {};
-for (const file of ['plugin.js', 'index.html', ...files, 'README.md', ...documentFiles.map(file => `docs/${file}`)]) archive[file] = new Uint8Array(await readFile(`dist/${file}`));
+for (const file of ['plugin.js', 'index.html', ...files, 'README.md', 'README.zh-CN.md', ...documentFiles.map(file => `docs/${file}`)]) archive[file] = new Uint8Array(await readFile(`dist/${file}`));
 const zip = zipSync(archive, { level: 9 });
 await writeFile('dist/sp-obsidian-sync.zip', zip);
 await writeFile('dist/sp-obsidian-sync.zip.sha256', `${createHash('sha256').update(zip).digest('hex')}  sp-obsidian-sync.zip\n`);

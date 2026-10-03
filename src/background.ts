@@ -3,6 +3,7 @@ import { defaultConfig } from './types';
 import { NodeVault } from './adapters/vault';
 import { readSnapshot } from './adapters/snapshot';
 import { SyncEngine } from './core/engine';
+import { translate } from './i18n';
 
 declare const PluginAPI: HostAPI;
 const api = PluginAPI;
@@ -19,9 +20,10 @@ function validateConfig(value: unknown): SyncConfig {
   const c = value as SyncConfig;
   if (!c || c.version !== 1 || typeof c.vaultPath !== 'string' || !Array.isArray(c.projectIds) || c.projectIds.some((id) => typeof id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(id)) || typeof c.paused !== 'boolean' || typeof c.exportArchive !== 'boolean' || typeof c.exportProjectNotes !== 'boolean') throw new Error('配置格式无效');
   new Intl.DateTimeFormat('zh-CN', { timeZone: c.timezone }).format();
+  if (c.language !== undefined && c.language !== 'zh' && c.language !== 'en') throw new Error('语言必须为 zh 或 en');
   const syncDelaySeconds = c.syncDelaySeconds ?? 10, fileCheckSeconds = c.fileCheckSeconds ?? 30;
   if (!Number.isInteger(syncDelaySeconds) || syncDelaySeconds < 3 || syncDelaySeconds > 300 || !Number.isInteger(fileCheckSeconds) || fileCheckSeconds < 10 || fileCheckSeconds > 300) throw new Error('同步延迟需为 3–300 秒，文件检查间隔需为 10–300 秒');
-  return { ...c, projectIds: [...new Set(c.projectIds)], syncDelaySeconds, fileCheckSeconds };
+  return { ...c, projectIds: [...new Set(c.projectIds)], syncDelaySeconds, fileCheckSeconds, language: c.language ?? 'zh' };
 }
 function serial<T>(work: () => Promise<T>): Promise<T> {
   const result = queue.then(() => { if (disposed) throw new Error('插件已停用'); return work(); });
@@ -56,9 +58,9 @@ function report(error: unknown): void {
   if (engine) engine.issues = [...engine.issues.filter((issue) => issue.code !== 'background'), { code: 'background', message }];
   else startupError = message;
 }
-api.registerMenuEntry({ label: 'Obsidian 同步', icon: 'sync', onClick: () => api.showIndexHtmlAsView() });
+api.registerMenuEntry({ label: 'Obsidian Sync / Obsidian 同步', icon: 'sync', onClick: () => api.showIndexHtmlAsView() });
 api.registerConfigHandler(() => api.showIndexHtmlAsView());
-api.registerHeaderButton({ label: 'Obsidian：立即同步', icon: 'sync', onClick: () => { void serial(runSync).then(() => api.showSnack({ msg: engine?.issues.length ? '同步有待处理问题，请打开 Obsidian 同步面板' : 'Obsidian 同步完成', type: engine?.issues.length ? 'WARNING' : 'SUCCESS' })).catch(report); } });
+api.registerHeaderButton({ label: 'Obsidian: Sync now / 立即同步', icon: 'sync', onClick: () => { void serial(runSync).then(() => api.showSnack({ msg: translate(engine?.issues.length ? '同步有待处理问题，请打开 Obsidian 同步面板' : 'Obsidian 同步完成', config.language), type: engine?.issues.length ? 'WARNING' : 'SUCCESS' })).catch(report); } });
 for (const hook of ['anyTaskUpdate', 'projectListUpdate', 'persistedDataChanged']) api.registerHook(hook, () => { if (!engine?.running) schedule(); });
 api.onMessage(async (input) => {
   const message = input as { command: string; [key: string]: unknown };

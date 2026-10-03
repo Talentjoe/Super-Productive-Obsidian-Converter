@@ -12,5 +12,5 @@ git('config', '--local', 'core.autocrlf', 'false');
 git('config', '--local', 'alias.changes', 'status --short');
 git('config', '--local', 'alias.history', 'log --graph --oneline --decorate -20');
 git('config', '--local', 'alias.last', 'show --stat --oneline HEAD');
-console.log('本项目 Git 管理已配置：git changes / git history / git last');
-console.log('现有 origin 保留；未修改全局 Git 配置。');
+console.log('Git helpers configured for this project: git changes / git history / git last');
+console.log('Existing origin preserved. Global Git settings unchanged.');

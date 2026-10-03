@@ -2,3 +2,4 @@
 :where(.connection){display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px;line-height:1.7}.connection span{flex:1}.progress{padding:12px 16px;border:1px solid var(--line);border-radius:10px;font-size:13px;background:var(--surface)}input:disabled{opacity:.55;cursor:default}
 
 select{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
+.language-setting{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-bottom:18px}.language-setting label{margin:0}.language-setting select{width:auto;min-width:150px}.task-edit button{white-space:normal}.dialog.wide button{white-space:normal;text-align:center}

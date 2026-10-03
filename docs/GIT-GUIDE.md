@@ -33,7 +33,7 @@ git switch -c improve-sync
 # 编辑源文件或文档后
 npm run check
 git diff
-git add src docs README.md
+git add src docs README.md README.zh-CN.md
 git diff --cached
 git commit -m "Improve task synchronization"
 git push -u origin improve-sync
@@ -79,7 +79,7 @@ npm run build
 - `npm run check`：类型检查、单元测试与构建。
 - `npm run dev`：仅用于界面开发；实际文件／任务操作需要桌面宿主。
 
-构建会把 `docs/AI-GUIDE.md` 嵌入仓库 README，并将同一份指南编入插件。修改 AI 指南后运行 `npm run docs` 或构建，然后一起提交更新后的 README。
+构建会把 `docs/AI-GUIDE.en.md` 嵌入英文 `README.md`，将 `docs/AI-GUIDE.md` 嵌入 `README.zh-CN.md`，并把两份指南编入插件。修改指南后运行 `npm run docs` 或构建，一起提交更新后的两份 README。
 
 真实宿主测试使用工作区 `.tmp/host/` 下的隔离 Super Productivity 19.1.0 实例、调试端口 9229 和 `.tmp/host/vault`，必须先启动、安装和配置插件，不能指向个人 vault。详见 [验收记录](VALIDATION.md)。相关命令为 `test:host`、`test:host:ui`、`test:host:multi`、`test:host:tags`。
 
@@ -89,12 +89,12 @@ npm run build
 
 ```powershell
 npm run check
-New-Item -ItemType Directory -Force releases/v0.1.3
-Copy-Item -LiteralPath dist/sp-obsidian-sync.zip -Destination releases/v0.1.3/sp-obsidian-sync.zip
-Copy-Item -LiteralPath dist/sp-obsidian-sync.zip.sha256 -Destination releases/v0.1.3/sp-obsidian-sync.zip.sha256
-git add releases manifest.json package.json package-lock.json README.md docs
+New-Item -ItemType Directory -Force releases/v0.1.4
+Copy-Item -LiteralPath dist/sp-obsidian-sync.zip -Destination releases/v0.1.4/sp-obsidian-sync.zip
+Copy-Item -LiteralPath dist/sp-obsidian-sync.zip.sha256 -Destination releases/v0.1.4/sp-obsidian-sync.zip.sha256
+git add releases manifest.json package.json package-lock.json README.md README.zh-CN.md docs
 git diff --cached --stat
-git commit -m "Package v0.1.3"
+git commit -m "Package v0.1.4"
 git push
 ```
 
